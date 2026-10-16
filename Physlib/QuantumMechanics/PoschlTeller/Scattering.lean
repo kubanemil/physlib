@@ -10,29 +10,33 @@ public import Physlib.QuantumMechanics.PoschlTeller.Basic
 
 # Scattering states of the 1d Pöschl-Teller system
 
-The polynomials describing the scattering states of the Pöschl-Teller system.
+The Pöschl-Teller potential is reflectionless.
 
 ## i. Overview
 
-At energy `E = ℏ² k² / (2 m)` the scattering states of the Pöschl-Teller system are of the form
-`ψₖ(x) = Pₖ(tanh (κ x)) e^{i k x}`, where the polynomial `Pₖ` is obtained by applying the
-operators `-∂ₓ + n κ tanh (κ x)`, for `n = 1, …, N`, to the plane wave `e^{i k x}`. The operator
-`-∂ₓ + n κ tanh (κ x)` intertwines the Hamiltonians of the Pöschl-Teller systems with family
-numbers `n - 1` and `n`, so it maps solutions of the one to solutions of the other at the same
-energy.
+At energy `E = ℏ² k² / (2 m)` the time-independent Schrödinger equation of the Pöschl-Teller
+system has the exact solution `ψₖ(x) = Pₖ(tanh (κ x)) e^{i k x}`, where the polynomial `Pₖ` is
+obtained by applying the operators `-∂ₓ + n κ tanh (κ x)`, for `n = 1, …, N`, to the plane wave
+`e^{i k x}`. The operator `-∂ₓ + n κ tanh (κ x)` intertwines the Hamiltonians of the Pöschl-Teller
+systems with family numbers `n - 1` and `n`, so it maps solutions of the one to solutions of the
+other at the same energy.
 
-This file works with the polynomial in `tanh (κ x)` multiplying `e^{i k x}`, as an element of
-`ℂ[X]`. The derivative, the raising operators and the Hamiltonian become operators on `ℂ[X]`, and
+Since `tanh (κ x) → ±1` as `x → ±∞`, the solution tends to `Pₖ(±1) e^{i k x}` at both ends.
+For `k ≠ 0` it describes a wave incident from the left (`k > 0`) or from the right (`k < 0`)
+which is fully transmitted: no reflected wave `e^{-i k x}` appears. This is the statement that the
+Pöschl-Teller potential is reflectionless.
+
+The polynomial in `tanh (κ x)` multiplying `e^{i k x}` is tracked as an element of `ℂ[X]`, so that
 the intertwining relation becomes an identity of polynomials.
 
 ## ii. Key results
 
-- `reducedHamiltonian_raise` : the raising operator intertwines the Hamiltonians with family
-  numbers `n` and `n + 1`.
-- `reducedHamiltonian_scatteringPoly` : the scattering polynomial `Pₖ` is an eigenvector of the
-  reduced Hamiltonian with eigenvalue `k²`.
-- `scatteringPoly_eval_one`, `scatteringPoly_eval_neg_one` : the values `Pₖ(1) = ∏ₙ (n κ - i k)`
-  and `Pₖ(-1) = ∏ₙ (-n κ - i k)`.
+- `schrodingerOperator_scatteringState` : the scattering state solves the time-independent
+  Schrödinger equation at energy `ℏ² k² / (2 m)`.
+- `tendsto_scatteringState_mul_exp_atTop`, `tendsto_scatteringState_mul_exp_atBot` : the
+  scattering state tends to `∏ₙ (n κ - i k) e^{i k x}` as `x → ∞` and to
+  `∏ₙ (-n κ - i k) e^{i k x}` as `x → -∞`.
+- `reflectionless` : the Pöschl-Teller potential is reflectionless.
 
 ## iii. Table of contents
 
@@ -41,6 +45,13 @@ the intertwining relation becomes an identity of polynomials.
   - A.2. The intertwining relation
   - A.3. The scattering polynomials
   - A.4. Values at `±1`
+- B. The Schrödinger operator
+- C. Waves modulated by polynomials in `tanh (κ x)`
+  - C.1. Derivatives and smoothness
+  - C.2. The Schrödinger operator
+  - C.3. Asymptotics
+- D. Scattering states
+- E. Reflectionlessness
 
 ## iv. References
 
@@ -54,7 +65,8 @@ namespace QuantumMechanics
 
 namespace PoschlTeller
 
-open Complex Polynomial
+open Complex Constants Polynomial Filter Topology
+open scoped ContDiff
 
 variable (Q : PoschlTeller)
 
@@ -190,6 +202,183 @@ lemma scatteringPoly_eval_neg_one_ne_zero (k : ℝ) (n : ℕ) :
     I_im, zero_re] at hre
   have := Q.κ_pos
   nlinarith [(Nat.cast_nonneg j : (0 : ℝ) ≤ j)]
+
+/-!
+## B. The Schrödinger operator
+-/
+
+/-- The Schrödinger operator of the Pöschl-Teller system acting on functions `ℝ → ℂ`,
+  `ψ ↦ -ℏ² / (2 m) ψ'' + V ψ`. -/
+def schrodingerOperator (ψ : ℝ → ℂ) : ℝ → ℂ := fun x =>
+  -(ℏ ^ 2 / (2 * Q.m) : ℝ) * deriv (deriv ψ) x + Q.potential (Space.oneEquiv.symm x) * ψ x
+
+/-!
+## C. Waves modulated by polynomials in `tanh (κ x)`
+-/
+
+/-- The wave `x ↦ p(tanh (κ x)) e^{i k x}`. -/
+def polyWave (k : ℝ) (p : ℂ[X]) (x : ℝ) : ℂ :=
+  p.eval (Real.tanh (Q.κ * x) : ℂ) * exp (k * x * I)
+
+/-!
+### C.1. Derivatives and smoothness
+-/
+
+/-- The derivative of `p(tanh (κ x)) e^{i k x}` is `(waveDeriv k p)(tanh (κ x)) e^{i k x}`. -/
+lemma hasDerivAt_polyWave (k : ℝ) (p : ℂ[X]) (x : ℝ) :
+    HasDerivAt (Q.polyWave k p) (Q.polyWave k (Q.waveDeriv k p) x) x := by
+  have ht : HasDerivAt (fun x => (Real.tanh (Q.κ * x) : ℂ))
+      (((1 - Real.tanh (Q.κ * x) ^ 2) * (Q.κ * 1) : ℝ) : ℂ) x :=
+    ((hasDerivAt_tanh _).comp x ((hasDerivAt_id x).const_mul Q.κ)).ofReal_comp
+  have hp := (p.hasDerivAt _).comp x ht
+  have he : HasDerivAt (fun x : ℝ => exp (k * x * I)) (exp (k * x * I) * (k * 1 * I)) x :=
+    ((((hasDerivAt_id x).ofReal_comp).const_mul (k : ℂ)).mul_const I).cexp
+  refine (hp.mul he).congr_deriv ?_
+  simp only [polyWave, waveDeriv, Function.comp_apply, eval_add, eval_mul, eval_C, eval_sub,
+    eval_one, eval_pow, eval_X]
+  push_cast
+  ring
+
+lemma deriv_polyWave (k : ℝ) (p : ℂ[X]) :
+    deriv (Q.polyWave k p) = Q.polyWave k (Q.waveDeriv k p) :=
+  funext fun x => (Q.hasDerivAt_polyWave k p x).deriv
+
+lemma differentiable_polyWave (k : ℝ) (p : ℂ[X]) : Differentiable ℝ (Q.polyWave k p) :=
+  fun x => (Q.hasDerivAt_polyWave k p x).differentiableAt
+
+/-- The wave `p(tanh (κ x)) e^{i k x}` is smooth. -/
+lemma contDiff_polyWave (k : ℝ) (p : ℂ[X]) : ContDiff ℝ ∞ (Q.polyWave k p) := by
+  rw [contDiff_infty]
+  intro n
+  induction n generalizing p with
+  | zero => exact contDiff_zero.mpr (Q.differentiable_polyWave k p).continuous
+  | succ n ih =>
+    rw [Nat.cast_succ, contDiff_succ_iff_deriv, deriv_polyWave]
+    exact ⟨Q.differentiable_polyWave k p,
+      by simp only [WithTop.natCast_ne_top, analyticOn_univ, IsEmpty.forall_iff], ih _⟩
+
+/-!
+### C.2. The Schrödinger operator
+-/
+
+/-- Multiplying the polynomial by a constant multiplies the wave by that constant. -/
+lemma polyWave_C_mul (k : ℝ) (c : ℂ) (p : ℂ[X]) :
+    Q.polyWave k (C c * p) = c • Q.polyWave k p := by
+  funext x
+  simp only [polyWave, ofReal_tanh, ofReal_mul, eval_mul, eval_C, mul_assoc, Pi.smul_apply,
+    smul_eq_mul]
+
+/-- The Schrödinger operator acts on `p(tanh (κ x)) e^{i k x}` through the reduced
+  Hamiltonian with family number `N`. -/
+lemma schrodingerOperator_polyWave (k : ℝ) (p : ℂ[X]) :
+    Q.schrodingerOperator (Q.polyWave k p) =
+      ((ℏ ^ 2 / (2 * Q.m) : ℝ) : ℂ) • Q.polyWave k (Q.reducedHamiltonian k Q.N p) := by
+  funext x
+  simp only [schrodingerOperator, deriv_polyWave, Q.potential_eq_tanh, Space.oneEquiv_symm_apply,
+    depth]
+  simp only [polyWave, reducedHamiltonian, eval_sub, eval_neg, eval_mul, eval_C, eval_one,
+    eval_pow, eval_X, Pi.smul_apply, smul_eq_mul]
+  push_cast
+  ring
+
+/-!
+### C.3. Asymptotics
+-/
+
+/-- Removing the plane wave factor from `p(tanh (κ x)) e^{i k x}` leaves `p(tanh (κ x))`. -/
+lemma polyWave_mul_exp (k : ℝ) (p : ℂ[X]) (x : ℝ) :
+    Q.polyWave k p x * exp (-(k * x * I)) = p.eval (Real.tanh (Q.κ * x) : ℂ) := by
+  rw [polyWave, mul_assoc, ← exp_add, add_neg_cancel, exp_zero, mul_one]
+
+/-- As `x → ∞`, `p(tanh (κ x)) e^{i k x}` approaches `p(1) e^{i k x}`. -/
+lemma tendsto_polyWave_mul_exp_atTop (k : ℝ) (p : ℂ[X]) :
+    Tendsto (fun x => Q.polyWave k p x * exp (-(k * x * I))) atTop (𝓝 (p.eval 1)) := by
+  simp_rw [Q.polyWave_mul_exp]
+  have ht : Tendsto (fun x => Real.tanh (Q.κ * x)) atTop (𝓝 1) :=
+    tendsto_tanh_atTop.comp (tendsto_id.const_mul_atTop Q.κ_pos)
+  have h := (p.continuous.tendsto _).comp ((continuous_ofReal.tendsto _).comp ht)
+  simpa only [ofReal_tanh, ofReal_mul, Function.comp_def, ofReal_one] using h
+
+/-- As `x → -∞`, `p(tanh (κ x)) e^{i k x}` approaches `p(-1) e^{i k x}`. -/
+lemma tendsto_polyWave_mul_exp_atBot (k : ℝ) (p : ℂ[X]) :
+    Tendsto (fun x => Q.polyWave k p x * exp (-(k * x * I))) atBot (𝓝 (p.eval (-1))) := by
+  simp_rw [Q.polyWave_mul_exp]
+  have ht : Tendsto (fun x => Real.tanh (Q.κ * x)) atBot (𝓝 (-1)) :=
+    tendsto_tanh_atBot.comp (tendsto_id.const_mul_atBot Q.κ_pos)
+  have h := (p.continuous.tendsto _).comp ((continuous_ofReal.tendsto _).comp ht)
+  simpa only [ofReal_tanh, ofReal_mul, Function.comp_def, ofReal_neg, ofReal_one] using h
+
+/-!
+## D. Scattering states
+-/
+
+/-- The scattering state of the Pöschl-Teller system with wavenumber `k`,
+  `ψₖ(x) = Pₖ(tanh (κ x)) e^{i k x}`. -/
+def scatteringState (k : ℝ) : ℝ → ℂ := Q.polyWave k (Q.scatteringPoly k Q.N)
+
+/-- The scattering state is smooth. -/
+lemma contDiff_scatteringState (k : ℝ) : ContDiff ℝ ∞ (Q.scatteringState k) :=
+  Q.contDiff_polyWave k _
+
+/-- The scattering state with wavenumber `k` solves the time-independent Schrödinger equation at
+  energy `ℏ² k² / (2 m)`. -/
+lemma schrodingerOperator_scatteringState (k : ℝ) :
+    Q.schrodingerOperator (Q.scatteringState k) =
+      ((ℏ ^ 2 * k ^ 2 / (2 * Q.m) : ℝ) : ℂ) • Q.scatteringState k := by
+  rw [scatteringState, schrodingerOperator_polyWave, reducedHamiltonian_scatteringPoly,
+    polyWave_C_mul, smul_smul]
+  congr 1
+  push_cast
+  ring
+
+/-- As `x → ∞`, the scattering state tends to `∏ₙ (n κ - i k) e^{i k x}`. -/
+lemma tendsto_scatteringState_mul_exp_atTop (k : ℝ) :
+    Tendsto (fun x => Q.scatteringState k x * exp (-(k * x * I))) atTop
+      (𝓝 (∏ j ∈ Finset.range Q.N, ((j + 1) * Q.κ - k * I))) := by
+  rw [← scatteringPoly_eval_one]
+  exact Q.tendsto_polyWave_mul_exp_atTop k _
+
+/-- As `x → -∞`, the scattering state tends to `∏ₙ (-n κ - i k) e^{i k x}`. -/
+lemma tendsto_scatteringState_mul_exp_atBot (k : ℝ) :
+    Tendsto (fun x => Q.scatteringState k x * exp (-(k * x * I))) atBot
+      (𝓝 (∏ j ∈ Finset.range Q.N, (-((j + 1) * Q.κ) - k * I))) := by
+  rw [← scatteringPoly_eval_neg_one]
+  exact Q.tendsto_polyWave_mul_exp_atBot k _
+
+/-!
+## E. Reflectionlessness
+-/
+
+/-- A function `ψ` approaches the plane wave `T e^{i k x}` if and only if `ψ(x) e^{-i k x}`
+  tends to `T`. -/
+lemma tendsto_sub_mul_exp_iff (l : Filter ℝ) (ψ : ℝ → ℂ) (k : ℝ) (T : ℂ) :
+    Tendsto (fun x => ψ x - T * exp (k * x * I)) l (𝓝 0) ↔
+      Tendsto (fun x => ψ x * exp (-(k * x * I))) l (𝓝 T) := by
+  conv_rhs => rw [tendsto_iff_norm_sub_tendsto_zero]
+  rw [tendsto_zero_iff_norm_tendsto_zero]
+  refine tendsto_congr fun x => ?_
+  have h : ψ x - T * exp (k * x * I) = (ψ x * exp (-(k * x * I)) - T) * exp (k * x * I) := by
+    rw [sub_mul, mul_assoc (ψ x), ← exp_add, neg_add_cancel, exp_zero, mul_one]
+  rw [h, norm_mul, ← ofReal_mul, norm_exp_ofReal_mul_I, mul_one]
+
+/-- **The Pöschl-Teller potential is reflectionless.** For every wavenumber `k` there is a smooth
+  solution `ψ` of the time-independent Schrödinger equation at energy `ℏ² k² / (2 m)` which
+  tends to the plane wave `T e^{i k x}` as `x → ∞` and to `T' e^{i k x}` as `x → -∞`, with
+  `T, T' ≠ 0`. For `k ≠ 0` this is a wave which passes through the well with no reflected wave
+  `e^{-i k x}`. -/
+theorem reflectionless (k : ℝ) :
+    ∃ ψ : ℝ → ℂ, ContDiff ℝ ∞ ψ ∧
+      Q.schrodingerOperator ψ = ((ℏ ^ 2 * k ^ 2 / (2 * Q.m) : ℝ) : ℂ) • ψ ∧
+      ∃ T T' : ℂ, T ≠ 0 ∧ T' ≠ 0 ∧
+        Tendsto (fun x => ψ x - T * exp (k * x * I)) atTop (𝓝 0) ∧
+        Tendsto (fun x => ψ x - T' * exp (k * x * I)) atBot (𝓝 0) := by
+  refine ⟨Q.scatteringState k, Q.contDiff_scatteringState k,
+    Q.schrodingerOperator_scatteringState k, _, _, Q.scatteringPoly_eval_one_ne_zero k Q.N,
+    Q.scatteringPoly_eval_neg_one_ne_zero k Q.N, ?_, ?_⟩
+  · rw [tendsto_sub_mul_exp_iff]
+    exact Q.tendsto_polyWave_mul_exp_atTop k _
+  · rw [tendsto_sub_mul_exp_iff]
+    exact Q.tendsto_polyWave_mul_exp_atBot k _
 
 end PoschlTeller
 end QuantumMechanics

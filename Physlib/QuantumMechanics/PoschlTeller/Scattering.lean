@@ -218,7 +218,7 @@ def schrodingerOperator (ψ : ℝ → ℂ) : ℝ → ℂ := fun x =>
 -/
 
 /-- The wave `x ↦ p(tanh (κ x)) e^{i k x}`. -/
-def polyWave (k : ℝ) (p : ℂ[X]) (x : ℝ) : ℂ :=
+def waveOfPoly (k : ℝ) (p : ℂ[X]) (x : ℝ) : ℂ :=
   p.eval (Real.tanh (Q.κ * x) : ℂ) * exp (k * x * I)
 
 /-!
@@ -226,8 +226,8 @@ def polyWave (k : ℝ) (p : ℂ[X]) (x : ℝ) : ℂ :=
 -/
 
 /-- The derivative of `p(tanh (κ x)) e^{i k x}` is `(polyDeriv k p)(tanh (κ x)) e^{i k x}`. -/
-lemma hasDerivAt_polyWave (k : ℝ) (p : ℂ[X]) (x : ℝ) :
-    HasDerivAt (Q.polyWave k p) (Q.polyWave k (Q.polyDeriv k p) x) x := by
+lemma hasDerivAt_waveOfPoly (k : ℝ) (p : ℂ[X]) (x : ℝ) :
+    HasDerivAt (Q.waveOfPoly k p) (Q.waveOfPoly k (Q.polyDeriv k p) x) x := by
   have ht : HasDerivAt (fun x => (Real.tanh (Q.κ * x) : ℂ))
       (((1 - Real.tanh (Q.κ * x) ^ 2) * (Q.κ * 1) : ℝ) : ℂ) x :=
     ((hasDerivAt_tanh _).comp x ((hasDerivAt_id x).const_mul Q.κ)).ofReal_comp
@@ -235,27 +235,27 @@ lemma hasDerivAt_polyWave (k : ℝ) (p : ℂ[X]) (x : ℝ) :
   have he : HasDerivAt (fun x : ℝ => exp (k * x * I)) (exp (k * x * I) * (k * 1 * I)) x :=
     ((((hasDerivAt_id x).ofReal_comp).const_mul (k : ℂ)).mul_const I).cexp
   refine (hp.mul he).congr_deriv ?_
-  simp only [polyWave, polyDeriv, Function.comp_apply, eval_add, eval_mul, eval_C, eval_sub,
+  simp only [waveOfPoly, polyDeriv, Function.comp_apply, eval_add, eval_mul, eval_C, eval_sub,
     eval_one, eval_pow, eval_X]
   push_cast
   ring
 
-lemma deriv_polyWave (k : ℝ) (p : ℂ[X]) :
-    deriv (Q.polyWave k p) = Q.polyWave k (Q.polyDeriv k p) :=
-  funext fun x => (Q.hasDerivAt_polyWave k p x).deriv
+lemma deriv_waveOfPoly (k : ℝ) (p : ℂ[X]) :
+    deriv (Q.waveOfPoly k p) = Q.waveOfPoly k (Q.polyDeriv k p) :=
+  funext fun x => (Q.hasDerivAt_waveOfPoly k p x).deriv
 
-lemma differentiable_polyWave (k : ℝ) (p : ℂ[X]) : Differentiable ℝ (Q.polyWave k p) :=
-  fun x => (Q.hasDerivAt_polyWave k p x).differentiableAt
+lemma differentiable_waveOfPoly (k : ℝ) (p : ℂ[X]) : Differentiable ℝ (Q.waveOfPoly k p) :=
+  fun x => (Q.hasDerivAt_waveOfPoly k p x).differentiableAt
 
 /-- The wave `p(tanh (κ x)) e^{i k x}` is smooth. -/
-lemma contDiff_polyWave (k : ℝ) (p : ℂ[X]) : ContDiff ℝ ∞ (Q.polyWave k p) := by
+lemma contDiff_waveOfPoly (k : ℝ) (p : ℂ[X]) : ContDiff ℝ ∞ (Q.waveOfPoly k p) := by
   rw [contDiff_infty]
   intro n
   induction n generalizing p with
-  | zero => exact contDiff_zero.mpr (Q.differentiable_polyWave k p).continuous
+  | zero => exact contDiff_zero.mpr (Q.differentiable_waveOfPoly k p).continuous
   | succ n ih =>
-    rw [Nat.cast_succ, contDiff_succ_iff_deriv, deriv_polyWave]
-    exact ⟨Q.differentiable_polyWave k p,
+    rw [Nat.cast_succ, contDiff_succ_iff_deriv, deriv_waveOfPoly]
+    exact ⟨Q.differentiable_waveOfPoly k p,
       by simp only [WithTop.natCast_ne_top, analyticOn_univ, IsEmpty.forall_iff], ih _⟩
 
 /-!
@@ -263,21 +263,21 @@ lemma contDiff_polyWave (k : ℝ) (p : ℂ[X]) : ContDiff ℝ ∞ (Q.polyWave k 
 -/
 
 /-- Multiplying the polynomial by a constant multiplies the wave by that constant. -/
-lemma polyWave_C_mul (k : ℝ) (c : ℂ) (p : ℂ[X]) :
-    Q.polyWave k (C c * p) = c • Q.polyWave k p := by
+lemma waveOfPoly_C_mul (k : ℝ) (c : ℂ) (p : ℂ[X]) :
+    Q.waveOfPoly k (C c * p) = c • Q.waveOfPoly k p := by
   funext x
-  simp only [polyWave, ofReal_tanh, ofReal_mul, eval_mul, eval_C, mul_assoc, Pi.smul_apply,
+  simp only [waveOfPoly, ofReal_tanh, ofReal_mul, eval_mul, eval_C, mul_assoc, Pi.smul_apply,
     smul_eq_mul]
 
 /-- The Schrödinger operator acts on `p(tanh (κ x)) e^{i k x}` through the reduced
   Hamiltonian with family number `N`. -/
-lemma schrodingerOperator_polyWave (k : ℝ) (p : ℂ[X]) :
-    Q.schrodingerOperator (Q.polyWave k p) =
-      ((ℏ ^ 2 / (2 * Q.m) : ℝ) : ℂ) • Q.polyWave k (Q.polyReducedHamiltonian k Q.N p) := by
+lemma schrodingerOperator_waveOfPoly (k : ℝ) (p : ℂ[X]) :
+    Q.schrodingerOperator (Q.waveOfPoly k p) =
+      ((ℏ ^ 2 / (2 * Q.m) : ℝ) : ℂ) • Q.waveOfPoly k (Q.polyReducedHamiltonian k Q.N p) := by
   funext x
-  simp only [schrodingerOperator, deriv_polyWave, Q.potential_eq_tanh, Space.oneEquiv_symm_apply,
+  simp only [schrodingerOperator, deriv_waveOfPoly, Q.potential_eq_tanh, Space.oneEquiv_symm_apply,
     depth]
-  simp only [polyWave, polyReducedHamiltonian, eval_sub, eval_neg, eval_mul, eval_C, eval_one,
+  simp only [waveOfPoly, polyReducedHamiltonian, eval_sub, eval_neg, eval_mul, eval_C, eval_one,
     eval_pow, eval_X, Pi.smul_apply, smul_eq_mul]
   push_cast
   ring
@@ -287,23 +287,23 @@ lemma schrodingerOperator_polyWave (k : ℝ) (p : ℂ[X]) :
 -/
 
 /-- Removing the plane wave factor from `p(tanh (κ x)) e^{i k x}` leaves `p(tanh (κ x))`. -/
-lemma polyWave_mul_exp (k : ℝ) (p : ℂ[X]) (x : ℝ) :
-    Q.polyWave k p x * exp (-(k * x * I)) = p.eval (Real.tanh (Q.κ * x) : ℂ) := by
-  rw [polyWave, mul_assoc, ← exp_add, add_neg_cancel, exp_zero, mul_one]
+lemma waveOfPoly_mul_exp (k : ℝ) (p : ℂ[X]) (x : ℝ) :
+    Q.waveOfPoly k p x * exp (-(k * x * I)) = p.eval (Real.tanh (Q.κ * x) : ℂ) := by
+  rw [waveOfPoly, mul_assoc, ← exp_add, add_neg_cancel, exp_zero, mul_one]
 
 /-- As `x → ∞`, `p(tanh (κ x)) e^{i k x}` approaches `p(1) e^{i k x}`. -/
-lemma tendsto_polyWave_mul_exp_atTop (k : ℝ) (p : ℂ[X]) :
-    Tendsto (fun x => Q.polyWave k p x * exp (-(k * x * I))) atTop (𝓝 (p.eval 1)) := by
-  simp_rw [Q.polyWave_mul_exp]
+lemma tendsto_waveOfPoly_mul_exp_atTop (k : ℝ) (p : ℂ[X]) :
+    Tendsto (fun x => Q.waveOfPoly k p x * exp (-(k * x * I))) atTop (𝓝 (p.eval 1)) := by
+  simp_rw [Q.waveOfPoly_mul_exp]
   have ht : Tendsto (fun x => Real.tanh (Q.κ * x)) atTop (𝓝 1) :=
     tendsto_tanh_atTop.comp (tendsto_id.const_mul_atTop Q.κ_pos)
   have h := (p.continuous.tendsto _).comp ((continuous_ofReal.tendsto _).comp ht)
   simpa only [ofReal_tanh, ofReal_mul, Function.comp_def, ofReal_one] using h
 
 /-- As `x → -∞`, `p(tanh (κ x)) e^{i k x}` approaches `p(-1) e^{i k x}`. -/
-lemma tendsto_polyWave_mul_exp_atBot (k : ℝ) (p : ℂ[X]) :
-    Tendsto (fun x => Q.polyWave k p x * exp (-(k * x * I))) atBot (𝓝 (p.eval (-1))) := by
-  simp_rw [Q.polyWave_mul_exp]
+lemma tendsto_waveOfPoly_mul_exp_atBot (k : ℝ) (p : ℂ[X]) :
+    Tendsto (fun x => Q.waveOfPoly k p x * exp (-(k * x * I))) atBot (𝓝 (p.eval (-1))) := by
+  simp_rw [Q.waveOfPoly_mul_exp]
   have ht : Tendsto (fun x => Real.tanh (Q.κ * x)) atBot (𝓝 (-1)) :=
     tendsto_tanh_atBot.comp (tendsto_id.const_mul_atBot Q.κ_pos)
   have h := (p.continuous.tendsto _).comp ((continuous_ofReal.tendsto _).comp ht)
@@ -315,19 +315,19 @@ lemma tendsto_polyWave_mul_exp_atBot (k : ℝ) (p : ℂ[X]) :
 
 /-- The scattering state of the Pöschl-Teller system with wavenumber `k`,
   `ψₖ(x) = Pₖ(tanh (κ x)) e^{i k x}`. -/
-def scatteringState (k : ℝ) : ℝ → ℂ := Q.polyWave k (Q.polyScattering k Q.N)
+def scatteringState (k : ℝ) : ℝ → ℂ := Q.waveOfPoly k (Q.polyScattering k Q.N)
 
 /-- The scattering state is smooth. -/
 lemma contDiff_scatteringState (k : ℝ) : ContDiff ℝ ∞ (Q.scatteringState k) :=
-  Q.contDiff_polyWave k _
+  Q.contDiff_waveOfPoly k _
 
 /-- The scattering state with wavenumber `k` solves the time-independent Schrödinger equation at
   energy `ℏ² k² / (2 m)`. -/
 lemma schrodingerOperator_scatteringState (k : ℝ) :
     Q.schrodingerOperator (Q.scatteringState k) =
       ((ℏ ^ 2 * k ^ 2 / (2 * Q.m) : ℝ) : ℂ) • Q.scatteringState k := by
-  rw [scatteringState, schrodingerOperator_polyWave, polyReducedHamiltonian_polyScattering,
-    polyWave_C_mul, smul_smul]
+  rw [scatteringState, schrodingerOperator_waveOfPoly, polyReducedHamiltonian_polyScattering,
+    waveOfPoly_C_mul, smul_smul]
   congr 1
   push_cast
   ring
@@ -337,14 +337,14 @@ lemma tendsto_scatteringState_mul_exp_atTop (k : ℝ) :
     Tendsto (fun x => Q.scatteringState k x * exp (-(k * x * I))) atTop
       (𝓝 (∏ j ∈ Finset.range Q.N, ((j + 1) * Q.κ - k * I))) := by
   rw [← polyScattering_eval_one]
-  exact Q.tendsto_polyWave_mul_exp_atTop k _
+  exact Q.tendsto_waveOfPoly_mul_exp_atTop k _
 
 /-- As `x → -∞`, the scattering state tends to `∏ₙ (-n κ - i k) e^{i k x}`. -/
 lemma tendsto_scatteringState_mul_exp_atBot (k : ℝ) :
     Tendsto (fun x => Q.scatteringState k x * exp (-(k * x * I))) atBot
       (𝓝 (∏ j ∈ Finset.range Q.N, (-((j + 1) * Q.κ) - k * I))) := by
   rw [← polyScattering_eval_neg_one]
-  exact Q.tendsto_polyWave_mul_exp_atBot k _
+  exact Q.tendsto_waveOfPoly_mul_exp_atBot k _
 
 /-!
 ## E. Reflectionlessness
@@ -377,9 +377,9 @@ theorem reflectionless (k : ℝ) :
     Q.schrodingerOperator_scatteringState k, _, _, Q.polyScattering_eval_one_ne_zero k Q.N,
     Q.polyScattering_eval_neg_one_ne_zero k Q.N, ?_, ?_⟩
   · rw [tendsto_sub_mul_exp_iff]
-    exact Q.tendsto_polyWave_mul_exp_atTop k _
+    exact Q.tendsto_waveOfPoly_mul_exp_atTop k _
   · rw [tendsto_sub_mul_exp_iff]
-    exact Q.tendsto_polyWave_mul_exp_atBot k _
+    exact Q.tendsto_waveOfPoly_mul_exp_atBot k _
 
 end PoschlTeller
 end QuantumMechanics
